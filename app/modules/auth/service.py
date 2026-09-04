@@ -1,0 +1,53 @@
+from fastapi import HTTPException, Response
+from fastapi_csrf_protect import CsrfProtect
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.auth.schemas import UserAuth
+from app.modules.auth.models import User
+from app.modules.auth.utils import create_access_token, create_refresh_token, hash_password, verify_password
+from app.core.config import settings
+
+COOKIE_PARAMS = dict(httponly=True, secure=settings.cookie_secure, samesite="lax")
+
+async def login_user_data(response: Response, data: UserAuth, csrf_protect: CsrfProtect, db: AsyncSession):
+    result = await db.execute(select(User).where(User.username == data.username))
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(data.password, user.hashed_password):
+        raise HTTPException(detail="Неверный логин или пароль", status_code=401)
+
+    csrf_token, signed_token = csrf_protect.generate_csrf_tokens()
+    csrf_protect.set_csrf_cookie(signed_token, response)
+
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+
+    response.set_cookie(key="access_token", value=access_token, **COOKIE_PARAMS)
+
+    response.set_cookie(key="refresh_token", value=refresh_token, **COOKIE_PARAMS)
+
+    return {
+        "user": {
+            "id": user.id,
+            "username": user.username
+        },
+        "csrf_token": csrf_token
+    }
+
+async def register_user_data(data: UserAuth, db: AsyncSession):
+    result = await db.execute(select(User).where(User.username == data.username))
+    user = result.scalar_one_or_none()
+
+    if user:
+        raise HTTPException(detail="Пользователь с таким именем уже существует", status_code=400)
+
+    hashed = hash_password(data.password)
+
+    new_user = User(username=data.username, hashed_password=hashed)
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    return new_user
