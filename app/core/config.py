@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     refresh_token_expire_minutes: int
     cookie_secure: bool
     csrf_secret_key: str
+    json_logs: bool = True
+    sql_echo: bool
 
     class Config:
         env_file = '.env'
