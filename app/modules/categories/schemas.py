@@ -12,3 +12,7 @@ class CategoryRead(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     type: TransactionType
+
+class CategoryUpdate(BaseModel):
+    name: str | None = None
+    type: TransactionType | None = None

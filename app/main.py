@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Request, logger
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+import structlog
 from app.api.v1.router import api_router
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from app.core.logging import setup_logging
@@ -7,6 +8,8 @@ from app.core.config import settings
 from app.core.middleware import LoggingMiddleware
 
 setup_logging(json_logs=settings.json_logs)
+
+logger = structlog.get_logger(__name__)
 
 app = FastAPI()
 
