@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     csrf_secret_key: str
     json_logs: bool = True
     sql_echo: bool
+    cors_origins: str = "http://localhost:5173"
 
     class Config:
         env_file = '.env'

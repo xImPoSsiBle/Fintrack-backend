@@ -1,11 +1,17 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import structlog
 from app.api.v1.router import api_router
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from app.core.logging import setup_logging
 from app.core.config import settings
 from app.core.middleware import LoggingMiddleware
+
+CORS_ORIGINS = settings.cors_origins
+ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
+ALLOWED_HEADERS = ["Content-Type", "Authorization", "X-CSRF-Token"]
+
 
 setup_logging(json_logs=settings.json_logs)
 
@@ -15,7 +21,15 @@ app = FastAPI()
 
 app.include_router(api_router, prefix="/api/v1")
 
-app.add_middleware(LoggingMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS
+    )
+
+app.add_middleware(LoggingMiddleware,)
 
 @app.exception_handler(CsrfProtectError)
 def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
