@@ -1,12 +1,20 @@
 from decimal import Decimal
 from datetime import date
-from sqlalchemy import ForeignKey, Numeric
+from sqlalchemy import ForeignKey, ForeignKeyConstraint, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.modules.categories.models import TransactionType
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["category_id", "type"],
+            ["categories.id", "categories.type"],
+            name="fk_transaction_category_type",
+        ),
+    )
+
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
