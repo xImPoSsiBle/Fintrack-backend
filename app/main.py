@@ -8,7 +8,7 @@ from app.core.logging import setup_logging
 from app.core.config import settings
 from app.core.middleware import LoggingMiddleware
 
-CORS_ORIGINS = settings.cors_origins
+CORS_ORIGINS = settings.cors_origins.split(",")
 ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
 ALLOWED_HEADERS = ["Content-Type", "Authorization", "X-CSRF-Token"]
 
@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=ALLOWED_HEADERS
     )
 
-app.add_middleware(LoggingMiddleware,)
+app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(CsrfProtectError)
 def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
