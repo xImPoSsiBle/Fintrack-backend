@@ -8,6 +8,7 @@ class CategoryRead(BaseModel):
     id: int
     name: str
     type: TransactionType
+    user_id: int | None
 
 class CategoryCreate(BaseModel):
     name: str

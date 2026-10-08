@@ -73,4 +73,15 @@ async def update_category_data(category_id: int, data: CategoryUpdate, current_u
     await db.refresh(category)
 
     return category
-    
+
+
+async def delete_category_data(category_id: int, current_user_id: int, db: AsyncSession):
+    category = await db.scalar(
+        select(Category).where(Category.id == category_id, Category.user_id == current_user_id)
+    )
+
+    if category is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Категория не найдена")
+
+    await db.delete(category)
+    await db.commit()
