@@ -12,6 +12,7 @@ from app.core.database import Base
 from app.modules.auth.models import User
 from app.modules.categories.models import Category
 from app.modules.transactions.models import Transaction
+from app.modules.goals.models import Goal, GoalContribution
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

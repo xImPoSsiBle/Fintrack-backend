@@ -5,7 +5,9 @@ import structlog
 
 from app.core.database import get_db
 from app.modules.auth.schemas import UserAuth
-from app.modules.auth.service import register_user_data, login_user_data
+from app.modules.auth.service import get_me_data, logout_data, register_user_data, login_user_data
+from app.modules.auth.models import User
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
@@ -19,3 +21,11 @@ async def login_user(response: Response, data: UserAuth,  csrf_protect: CsrfProt
 @router.post('/register')
 async def register_user(data: UserAuth, db: AsyncSession = Depends(get_db)):
     return await register_user_data(data, db)
+
+@router.get('/me')
+async def get_me(current_user: User =  Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await get_me_data(current_user.id, db)
+
+@router.post('/logout')
+async def logout(response: Response, csrf_protect: CsrfProtect = Depends()):
+    return await logout_data(response, csrf_protect)
