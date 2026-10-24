@@ -1,20 +1,32 @@
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.transactions.models import Transaction
 from app.modules.transactions.schemas import TransactionCreate
 from app.modules.categories.models import Category
+from app.core.period import Period, get_date_from
 
-async def get_transactions_data(current_user_id: int, db: AsyncSession):
-    result = await db.execute(select(
-        Category.name.label("name"),
-        Transaction
+async def get_transactions_data(current_user_id: int, db: AsyncSession, search: str | None = None, period: Period = Period.all):
+    query = (select(
+            Category.name.label("name"),
+            Transaction
         )
         .join(Category, Transaction.category_id == Category.id)
         .where(Transaction.user_id == current_user_id)
         .order_by(Transaction.date.desc())
         )
+
+    date_from = get_date_from(period)
+
+    if date_from:
+        query = query.where(Transaction.date >= date_from)
+
+    if search:
+       pattern = f"%{search}%"
+       query = query.where(or_(Category.name.ilike(pattern), Transaction.description.ilike(pattern)))
+
+    result = await db.execute(query)
 
     return [
         {
