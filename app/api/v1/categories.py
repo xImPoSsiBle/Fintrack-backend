@@ -15,8 +15,8 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 @router.get("", response_model=list[CategoryRead])
-async def get_categories(db: AsyncSession = Depends(get_db)):
-    return await get_categories_data(db)
+async def get_categories(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await get_categories_data(current_user.id, db)
 
 @router.get("/{type}", response_model=list[CategoryRead])
 async def get_category_by_type(type: TransactionType, current_user: User | None = Depends(get_optional_current_user), db: AsyncSession = Depends(get_db)):

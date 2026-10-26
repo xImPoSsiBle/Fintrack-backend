@@ -8,8 +8,8 @@ from app.modules.categories.schemas import CategoryCreate, CategoryUpdate
 
 logger = structlog.get_logger(__name__)
 
-async def get_categories_data(db: AsyncSession):
-    result = await db.execute(select(Category))
+async def get_categories_data(current_user_id: int, db: AsyncSession):
+    result = await db.execute(select(Category).where(or_(Category.user_id == current_user_id, Category.user_id.is_(None))))
     return result.scalars().all()
 
 async def get_category_by_type_data(type: TransactionType, current_user_id: int | None, db: AsyncSession):
