@@ -3,10 +3,13 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from app.modules.goals.models import Goal, GoalContribution
 from app.modules.goals.schemas import ContributionCreate, GoalCreate, GoalResponse
 from app.modules.stats.service import get_summary_data
+
+logger = structlog.get_logger(__name__)
 
 async def get_available_data(current_user_id: int, db: AsyncSession) -> Decimal:
     summary = await get_summary_data(current_user_id, db)
@@ -48,6 +51,7 @@ async def create_goal_data(data: GoalCreate, current_user_id: int, db: AsyncSess
     )
 
     if existing:
+        logger.warning("goal_create_duplicate", user_id=current_user_id, name=data.name)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Накопление с таким именем уже существует")
 
     new_goal = Goal(user_id=current_user_id, name=data.name, target_amount=data.target_amount, deadline=data.deadline)
@@ -55,6 +59,8 @@ async def create_goal_data(data: GoalCreate, current_user_id: int, db: AsyncSess
     db.add(new_goal)
     await db.commit()
     await db.refresh(new_goal)
+
+    logger.info("goal_created", goal_id=new_goal.id, user_id=current_user_id)
 
     return GoalResponse(
             id=new_goal.id,
@@ -71,6 +77,7 @@ async def add_money_to_goal_data(goal_id: int, data: ContributionCreate, current
     )
 
     if goal is None:
+        logger.warning("goal_not_found", goal_id=goal_id, user_id=current_user_id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Накопление не найдено")
 
     current = await db.scalar(
@@ -79,6 +86,7 @@ async def add_money_to_goal_data(goal_id: int, data: ContributionCreate, current
     )
 
     if current + data.amount > goal.target_amount:
+        logger.warning("contribution_exceeds_target", goal_id=goal_id, user_id=current_user_id, amount=str(data.amount))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Сумма превышает остаток до цели",
@@ -87,6 +95,7 @@ async def add_money_to_goal_data(goal_id: int, data: ContributionCreate, current
     available = await get_available_data(current_user_id, db)
 
     if data.amount > available:
+        logger.warning("contribution_insufficient_funds", goal_id=goal_id, user_id=current_user_id, amount=str(data.amount))
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Недостаточно свободных средст")
 
     new_contribution = GoalContribution(
@@ -97,6 +106,8 @@ async def add_money_to_goal_data(goal_id: int, data: ContributionCreate, current
     db.add(new_contribution)
     await db.commit()
 
+    logger.info("contribution_added", goal_id=goal_id, user_id=current_user_id, amount=str(data.amount))
+
 
 async def delete_goal_data(goal_id: int, current_user_id: int, db: AsyncSession):
     goal = await db.scalar(
@@ -104,7 +115,10 @@ async def delete_goal_data(goal_id: int, current_user_id: int, db: AsyncSession)
     )
 
     if goal is None:
+        logger.warning("goal_not_found", goal_id=goal_id, user_id=current_user_id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Накопление не найдено")
     
     await db.delete(goal)
     await db.commit()
+
+    logger.info("goal_deleted", goal_id=goal_id, user_id=current_user_id)
