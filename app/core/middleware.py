@@ -9,23 +9,23 @@ logger = structlog.get_logger("app.requests")
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        structlog.contextvars.clear_contextvars()
         request_id = str(uuid.uuid4())
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
-        start_time = time.perf_counter()
+        start = time.perf_counter()
+        status_code = 500
         try:
             response = await call_next(request)
-        except Exception:
-            logger.exception("unhandled_exception", path=request.url.path)
-            raise
-        duration = time.perf_counter() - start_time
-
-        logger.info(
-            "request_completed",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration=round(duration*1000, 2)
-        )
-        response.headers["X-Request-ID"] = request_id
-        return response
+            status_code = response.status_code
+            response.headers["X-Request-ID"] = request_id
+            return response
+        finally:
+            logger.info(
+                "request_completed",
+                method=request.method,
+                path=request.url.path,
+                status_code=status_code,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                user_id=getattr(request.state, "user_id", None),
+            )

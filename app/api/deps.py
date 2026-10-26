@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, Request, status
+from fastapi_csrf_protect import CsrfProtect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt, JWTError
@@ -45,3 +46,6 @@ async def get_optional_current_user(request: Request, db: AsyncSession = Depends
 
     result = await db.execute(select(User).where(User.id == int(user_id)))
     return result.scalar_one_or_none()
+
+async def verify_csrf(request: Request, csrf_protect: CsrfProtect = Depends()):
+    await csrf_protect.validate_csrf(request)
