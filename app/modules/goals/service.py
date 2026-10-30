@@ -3,8 +3,10 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 import structlog
 
+from app.modules.auth.models import User
 from app.modules.goals.models import Goal, GoalContribution
 from app.modules.goals.schemas import ContributionCreate, GoalCreate, GoalResponse
 from app.modules.stats.service import get_summary_data
@@ -57,7 +59,12 @@ async def create_goal_data(data: GoalCreate, current_user_id: int, db: AsyncSess
     new_goal = Goal(user_id=current_user_id, name=data.name, target_amount=data.target_amount, deadline=data.deadline)
 
     db.add(new_goal)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.warning("goal_create_duplicate", user_id=current_user_id, name=data.name)
+        raise HTTPException(status.HTTP_409_CONFLICT, "Накопление с таким именем уже существует")
     await db.refresh(new_goal)
 
     logger.info("goal_created", goal_id=new_goal.id, user_id=current_user_id)
@@ -71,9 +78,10 @@ async def create_goal_data(data: GoalCreate, current_user_id: int, db: AsyncSess
         )
 
 async def add_money_to_goal_data(goal_id: int, data: ContributionCreate, current_user_id: int, db: AsyncSession):
+    await db.execute(select(User.id).where(User.id == current_user_id).with_for_update())
+
     goal = await db.scalar(
-        select(Goal)
-        .where(Goal.id == goal_id, Goal.user_id == current_user_id)
+        select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user_id)
     )
 
     if goal is None:
