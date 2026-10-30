@@ -6,12 +6,12 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.period import Period
 from app.modules.stats.service import get_by_category_data, get_monthly_data, get_summary_data
-from app.modules.stats.schemas import ByCategoryRead, MonthlyRead
+from app.modules.stats.schemas import ByCategoryRead, MonthlyRead, SummaryRead
 from app.modules.categories.models import TransactionType
 
 router = APIRouter()
 
-@router.get("/summary")
+@router.get("/summary", response_model=SummaryRead)
 async def get_summary(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db), period: Period = Query(Period.all)):
     return await get_summary_data(current_user.id, db, period)
 
