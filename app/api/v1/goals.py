@@ -10,7 +10,7 @@ from app.core.database import get_db
 
 router = APIRouter()
 
-@router.get("/", response_model=list[GoalResponse])
+@router.get("", response_model=list[GoalResponse])
 async def get_goals(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await get_goals_data(current_user.id, db)
 
