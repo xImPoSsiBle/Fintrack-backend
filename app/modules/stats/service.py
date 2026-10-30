@@ -6,23 +6,25 @@ from app.modules.transactions.models import Transaction
 from app.modules.categories.models import TransactionType, Category
 
 
-async def get_summary_data(current_user_id: int, db: AsyncSession, period: Period = Period.all,):
-    query = (select(
-                func.coalesce(
-                    func.sum(case((Transaction.type == "income", Transaction.amount), else_=0)), 0
-                ).label("income"),
-                func.coalesce(
-                    func.sum(case((Transaction.type == "expense", Transaction.amount), else_=0)), 0
-                ).label("expense")
-            )
-            .where(Transaction.user_id == current_user_id)
-        )
-
+def _filters(user_id: int, period: Period) -> list:
+    conditions = [Transaction.user_id == user_id]
     date_from = get_date_from(period)
     if date_from:
-        query = query.where(Transaction.date >= date_from)
+        conditions.append(Transaction.date >= date_from)
+    return conditions
 
-    result = await db.execute(query)
+def _sum_of(type_: TransactionType):
+    return func.coalesce(
+        func.sum(Transaction.amount).filter(Transaction.type == type_), 0
+    )
+
+async def get_summary_data(current_user_id: int, db: AsyncSession, period: Period = Period.all,):
+    result = await db.execute(
+        select(
+                _sum_of(TransactionType.income).label("income"),
+                _sum_of(TransactionType.expense).label("expense"),
+        ).where(*_filters(current_user_id, period))
+    )
 
     row = result.one()
 
@@ -33,48 +35,32 @@ async def get_summary_data(current_user_id: int, db: AsyncSession, period: Perio
     }
 
 async def get_monthly_data(current_user_id: int, db: AsyncSession, period: Period = Period.all,):
-    query = (select(
-                func.to_char(
-                    func.date_trunc("month", Transaction.date),
-                    "YYYY-MM"
-                ).label("month"),
-                func.coalesce(
-                    func.sum(case((Transaction.type == "income", Transaction.amount), else_=0)), 0
-                ).label("income"),
-                func.coalesce(
-                    func.sum(case((Transaction.type == "expense", Transaction.amount), else_=0)), 0
-                ).label("expense")
+    month = month = func.to_char(Transaction.date, "YYYY-MM").label("month")
+    result = await db.execute(
+        select(
+            month,
+            _sum_of(TransactionType.income).label("income"),
+            _sum_of(TransactionType.expense).label("expense"),
         )
-        .where(Transaction.user_id == current_user_id)
-        .group_by("month")
-        .order_by("month")
+        .where(*_filters(current_user_id, period))
+        .group_by(month)
+        .order_by(month)
     )
-
-    date_from = get_date_from(period)
-    if date_from:
-        query = query.where(Transaction.date >= date_from)
-
-    result = await db.execute(query)
 
     return result.all()
 
 
 async def get_by_category_data(type: TransactionType, current_user_id: int, db: AsyncSession, period: Period = Period.all,):
-    query = (select(
-                Category.name.label("name"),
-                func.coalesce(
-                    func.sum(Transaction.amount), 0
-                ).label("value")
+    total = func.sum(Transaction.amount).label("value")
+
+    result = await db.execute(
+        select(
+                Category.name.label("name"), total
         )
         .join(Category, Transaction.category_id == Category.id)
-        .where(Transaction.user_id == current_user_id, Transaction.type == type)
-        .group_by("name")
+        .where(*_filters(current_user_id, period), Transaction.type == type)
+        .group_by(Category.id, Category.name)
+        .order_by(total.desc())
     )
-
-    date_from = get_date_from(period)
-    if date_from:
-        query = query.where(Transaction.date >= date_from)
-
-    result = await db.execute(query)
 
     return result.all()
