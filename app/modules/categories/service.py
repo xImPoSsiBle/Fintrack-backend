@@ -1,10 +1,12 @@
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select, func
+from sqlalchemy import exists, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 import structlog
 
 from app.modules.categories.models import Category, TransactionType
 from app.modules.categories.schemas import CategoryCreate, CategoryUpdate
+from app.modules.transactions.models import Transaction
 
 logger = structlog.get_logger(__name__)
 
@@ -86,7 +88,16 @@ async def delete_category_data(category_id: int, current_user_id: int, db: Async
         logger.warning("category_not_found", category_id=category_id, user_id=current_user_id)
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Категория не найдена")
 
+    in_use = await db.scalar(select(exists().where(Transaction.category_id == category_id)))
+    if in_use:
+        logger.warning("category_delete_blocked", category_id=category_id, user_id=current_user_id)
+        raise HTTPException(status.HTTP_409_CONFLICT, "Нельзя удалить категорию: в ней есть транзакции")
+
     await db.delete(category)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Нельзя удалить категорию: в ней есть транзакции")    
 
     logger.info("category_deleted", category_id=category_id, user_id=current_user_id)

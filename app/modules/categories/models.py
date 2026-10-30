@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import ForeignKey, Index, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Index, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -15,7 +15,7 @@ class Category(Base):
         UniqueConstraint("id", "type", name="uq_category_id_type"),
         Index(
             "uq_category_user_name_lower",
-            "user_id", func.lower("name"),
+            "user_id", text("lower(name)"),
             unique=True,
         ),
     )
