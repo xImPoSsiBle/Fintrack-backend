@@ -1,12 +1,15 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import structlog
+
 from app.api.v1.router import api_router
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from app.core.logging import setup_logging
 from app.core.config import settings
 from app.core.middleware import LoggingMiddleware
+from app.core.redis import redis_client
 
 CORS_ORIGINS = settings.cors_origins.split(",")
 ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
@@ -17,7 +20,12 @@ setup_logging(json_logs=settings.json_logs)
 
 logger = structlog.get_logger(__name__)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await redis_client.aclose()
+
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(api_router, prefix="/api/v1")
 

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     json_logs: bool = True
     sql_echo: bool
     cors_origins: str = "http://localhost:5173"
+    redis_url: str
 
     class Config:
         env_file = '.env'
