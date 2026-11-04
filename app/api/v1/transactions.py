@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
 
 from app.core.database import get_db
 from app.core.period import Period
+from app.core.redis import get_redis
 from app.api.deps import get_current_user, verify_csrf
 from app.modules.auth.models import User
 from app.modules.transactions.service import delete_transaction_data, get_transactions_data, create_transaction_data
@@ -26,8 +28,9 @@ async def create_transaction(
     data: TransactionCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ):
-    return await create_transaction_data(data, current_user.id, db)
+    return await create_transaction_data(data, current_user.id, db, redis)
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(verify_csrf)])
@@ -35,5 +38,6 @@ async def delete_transaction(
     transaction_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ):
-    await delete_transaction_data(transaction_id, current_user.id, db)
+    await delete_transaction_data(transaction_id, current_user.id, db, redis)

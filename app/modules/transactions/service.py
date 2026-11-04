@@ -1,13 +1,15 @@
 from fastapi import HTTPException, status
-from sqlalchemy import delete, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 import structlog
+from redis.asyncio import Redis
 
 from app.modules.transactions.models import Transaction
 from app.modules.transactions.schemas import TransactionCreate
 from app.modules.categories.models import Category
 from app.core.period import Period, get_date_from
+from app.core.cache import bump_stats_version
 
 logger = structlog.get_logger(__name__)
 
@@ -40,7 +42,12 @@ async def get_transactions_data(current_user_id: int, db: AsyncSession, search: 
         for row in result.all()
     ]
 
-async def create_transaction_data(data: TransactionCreate, current_user_id: int, db: AsyncSession):
+async def create_transaction_data(
+        data: TransactionCreate, 
+        current_user_id: int, db: 
+        AsyncSession, 
+        redis: Redis,
+):
     category = await db.scalar(
         select(Category).where(
             Category.id == data.category_id, 
@@ -70,6 +77,8 @@ async def create_transaction_data(data: TransactionCreate, current_user_id: int,
         await db.rollback()
         logger.warning("transaction_category_gone", user_id=current_user_id, category_id=data.category_id)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Категория не найдена или не соответствует типу транзакции")
+
+    await bump_stats_version(redis, current_user_id)
     await db.refresh(new_transaction)
 
     logger.info(
@@ -81,7 +90,12 @@ async def create_transaction_data(data: TransactionCreate, current_user_id: int,
     )
     return new_transaction
 
-async def delete_transaction_data(transaction_id: int, current_user_id: int,  db: AsyncSession):
+async def delete_transaction_data(
+        transaction_id: int, 
+        current_user_id: int,  
+        db: AsyncSession,
+        redis: Redis,
+):
     transaction = await db.scalar(
         select(Transaction).where(Transaction.id == transaction_id, Transaction.user_id == current_user_id)
     )
@@ -92,5 +106,5 @@ async def delete_transaction_data(transaction_id: int, current_user_id: int,  db
 
     await db.delete(transaction)
     await db.commit()
-
+    await bump_stats_version(redis, current_user_id)
     logger.info("transaction_deleted", transaction_id=transaction_id, user_id=current_user_id)
