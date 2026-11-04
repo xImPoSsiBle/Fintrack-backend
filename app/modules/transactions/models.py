@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import date
-from sqlalchemy import ForeignKey, ForeignKeyConstraint, Numeric
+from sqlalchemy import ForeignKey, ForeignKeyConstraint, Index, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.modules.categories.models import TransactionType
@@ -13,6 +13,7 @@ class Transaction(Base):
             ["categories.id", "categories.type"],
             name="fk_transaction_category_type",
         ),
+        Index("idx_transactions_user_date", "user_id", "date"),
     )
 
 
