@@ -8,7 +8,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.period import Period
 from app.core.redis import get_redis
-from app.core.cache import stats_version, STATS_TTL
+from app.core.cache import cache_get, cache_set, stats_version, STATS_TTL
 from app.modules.stats.service import get_by_category_data, get_monthly_data, get_summary_data
 from app.modules.stats.schemas import ByCategoryRead, MonthlyRead, SummaryRead
 from app.modules.categories.models import TransactionType
@@ -26,15 +26,18 @@ async def get_summary(
     period: Period = Query(Period.all)
 ):
     ver = await stats_version(redis, current_user.id)
+    if ver is not None:
+        key = f"stats:summary:{current_user.id}:v{ver}:{period.value}"
 
-    key = f"stats:summary:{current_user.id}:v{ver}:{period.value}"
-
-    if cached := await redis.get(key):
-        return SummaryRead.model_validate_json(cached)
+        if cached := await cache_get(redis, key):
+            return SummaryRead.model_validate_json(cached)
 
     data = await get_summary_data(current_user.id, db, period)
     result = SummaryRead.model_validate(data)
-    await redis.set(key, result.model_dump_json(), ex=STATS_TTL)
+
+    if ver is not None:
+        await cache_set(redis, key, result.model_dump_json(), STATS_TTL)
+
     return result
 
 @router.get("/monthly", response_model=list[MonthlyRead])
@@ -46,14 +49,17 @@ async def get_monthly(
 ):
     ver = await stats_version(redis, current_user.id)
 
-    key = f"stats:monthly:{current_user.id}:v{ver}:{period.value}"
+    if ver is not None:
+        key = f"stats:monthly:{current_user.id}:v{ver}:{period.value}"
 
-    if cached := await redis.get(key):
-        return monthly_adapter.validate_json(cached)
+        if cached := await cache_get(redis, key):
+            return monthly_adapter.validate_json(cached)
 
     data = await get_monthly_data(current_user.id, db, period)
     result = monthly_adapter.validate_python(data, from_attributes=True)
-    await redis.set(key, monthly_adapter.dump_json(result), ex=STATS_TTL)
+
+    if ver is not None:
+        await cache_set(redis, key, monthly_adapter.dump_json(result), STATS_TTL)
 
     return result
 
@@ -67,13 +73,16 @@ async def get_by_category(
 ):
     ver = await stats_version(redis, current_user.id)
 
-    key = f"stats:by-category:{current_user.id}:v{ver}:{type.value}:{period.value}"
+    if ver is not None:
+        key = f"stats:by-category:{current_user.id}:v{ver}:{type.value}:{period.value}"
 
-    if cached := await redis.get(key):
-        return by_category_adapter.validate_json(cached)
+        if cached := await cache_get(redis, key):
+            return by_category_adapter.validate_json(cached)
 
     data = await get_by_category_data(type, current_user.id, db, period)
     result = by_category_adapter.validate_python(data, from_attributes=True)
-    await redis.set(key, by_category_adapter.dump_json(result), ex=STATS_TTL)
+
+    if ver is not None:
+        await cache_set(redis, key, by_category_adapter.dump_json(result), STATS_TTL)
     
     return result
