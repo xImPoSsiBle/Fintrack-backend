@@ -16,13 +16,14 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: str | None = payload.get("sub")
-        if user_id is None:
+        user_id: str | None = int(payload.get("sub"))
+        token_type: str = payload.get("type")
+        if user_id is None or token_type != "access":
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Невалидный токен")
-    except JWTError:
+    except (JWTError, ValueError):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Невалидный токен")
 
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if user is None:

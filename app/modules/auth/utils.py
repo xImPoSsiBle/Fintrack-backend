@@ -13,13 +13,13 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def create_access_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    return jwt.encode({"sub": str(user_id), "exp": expire}, settings.secret_key, algorithm=settings.algorithm)
+    return jwt.encode({"sub": str(user_id), "type": "access", "exp": expire}, settings.secret_key, algorithm=settings.algorithm)
 
 def create_refresh_token(user_id: int) -> str:
     jti = uuid.uuid4().hex
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.refresh_token_expire_minutes)
     token = jwt.encode(
-        {"sub": str(user_id), "jti": jti, "exp": expire}, 
+        {"sub": str(user_id), "jti": jti, "type": "refresh", "exp": expire}, 
         settings.secret_key, algorithm=settings.algorithm
     )
 
@@ -30,6 +30,11 @@ def decode_refresh_token(token: str | None) -> tuple[int, str] | None:
         return None
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        token_type = payload.get("type")
+        
+        if token_type != "refresh":
+            return None
+        
         user_id = int(payload["sub"])
         jti = payload["jti"]
     except (JWTError, KeyError, ValueError, TypeError):
