@@ -14,13 +14,15 @@ router = APIRouter()
 
 @router.post('/login')
 async def login_user(
+    request: Request,
     response: Response, 
     data: UserAuth,  
     csrf_protect: CsrfProtect = Depends(), 
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ):
-    return await login_user_data(response, data, csrf_protect, db, redis)
+    ip = request.client.host if request.client else "unknown"
+    return await login_user_data(response, ip, data, csrf_protect, db, redis)
 
 @router.post('/register')
 async def register_user(data: UserAuth, db: AsyncSession = Depends(get_db)):

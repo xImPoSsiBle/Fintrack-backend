@@ -12,6 +12,7 @@ from app.modules.auth.models import User
 from app.modules.auth.utils import create_access_token, create_refresh_token, decode_refresh_token, hash_password, verify_password
 from app.modules.auth.token_store import store_refresh, consume_refresh
 from app.core.config import settings
+from app.core.rate_limit import check_rate_limit, register_failure, clear_failures
 
 
 logger = structlog.get_logger(__name__)
@@ -30,18 +31,33 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
     response.set_cookie(key="access_token", value=access_token, **COOKIE_PARAMS)
     response.set_cookie(key="refresh_token", value=refresh_token, **COOKIE_PARAMS)
 
+LOGIN_WINDOW = 900
+IP_LIMIT = 20
+USER_LIMIT = 5
+
 async def login_user_data(
         response: Response, 
+        ip: str,
         data: UserAuth, 
         csrf_protect: CsrfProtect, 
         db: AsyncSession,
         redis: Redis
 ):
+    ip_key = f"rl:login:ip:{ip}"
+    user_key = f"rt_login:user:{data.username.strip().lower()}"
+
+    await check_rate_limit(redis, ip_key, IP_LIMIT, LOGIN_WINDOW)
+    await check_rate_limit(redis, user_key, USER_LIMIT, LOGIN_WINDOW)
+    
     user = await db.scalar(select(User).where(User.username == data.username))
 
     if not user or not verify_password(data.password, user.hashed_password):
+        await register_failure(redis, ip_key, LOGIN_WINDOW)
+        await register_failure(redis, user_key, LOGIN_WINDOW)
         logger.warning("login_failed", username=data.username)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")
+
+    await clear_failures(redis, user_key)
 
     csrf_token = _issue_csrf(response, csrf_protect)
 
